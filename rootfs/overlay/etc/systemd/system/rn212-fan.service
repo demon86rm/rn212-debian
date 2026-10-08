@@ -1,0 +1,11 @@
+[Unit]
+Description=ReadyNAS RN212 fan control
+After=systemd-modules-load.service
+
+[Service]
+ExecStart=/usr/local/sbin/rn212-fan
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

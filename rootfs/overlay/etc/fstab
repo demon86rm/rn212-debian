@@ -1,0 +1,3 @@
+# <file system>  <mount point>  <type>  <options>                  <dump> <pass>
+/dev/md9         /              ext4    errors=remount-ro,noatime  0      1
+# Data array, added by rn212-mirror-disk:

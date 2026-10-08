@@ -1,0 +1,17 @@
+# Build environment for the RN212 Debian port: armhf cross toolchain,
+# kernel build deps, Debian packaging, debootstrap + qemu for the rootfs.
+FROM docker.io/library/debian:trixie
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc-arm-linux-gnueabihf libc6-dev-armhf-cross \
+        bc bison flex libssl-dev libelf-dev dwarves kmod cpio rsync \
+        python3 perl xz-utils zstd lz4 git ca-certificates curl wget \
+        u-boot-tools device-tree-compiler \
+        debhelper dpkg-dev fakeroot \
+        debootstrap qemu-user-static binfmt-support \
+        mtd-utils dosfstools e2fsprogs file \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
+WORKDIR /work

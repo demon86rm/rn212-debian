@@ -1,0 +1,48 @@
+#!/bin/sh
+# rn212-fan: simple fan curve for the ReadyNAS RN212.
+# Fan controller: GMT G762 (hwmon "g762"), driven open-loop through pwm1.
+# Inputs: every hwmon temp*_input on the box (SoC thermal sensor, disks via
+# the drivetemp module); the hottest one decides.
+#
+# Curve (°C -> PWM 0..255), linear between points; tune in
+# /etc/default/rn212-fan.
+MIN_TEMP=40 MAX_TEMP=60 MIN_PWM=70 MAX_PWM=255 INTERVAL=10
+[ -r /etc/default/rn212-fan ] && . /etc/default/rn212-fan
+
+find_g762() {
+	for h in /sys/class/hwmon/hwmon*; do
+		[ "$(cat "$h/name" 2>/dev/null)" = g762 ] && { echo "$h"; return 0; }
+	done
+	return 1
+}
+
+modprobe drivetemp 2>/dev/null || true
+
+FAN=$(find_g762) || { echo "rn212-fan: no g762 hwmon device found" >&2; exit 1; }
+echo 1 > "$FAN/pwm1_enable"          # 1 = open loop, pwm1 sets duty cycle
+trap 'echo "$MAX_PWM" > "$FAN/pwm1"; exit 0' INT TERM
+
+last=-1
+while :; do
+	hottest=0
+	for t in /sys/class/hwmon/hwmon*/temp*_input; do
+		[ -r "$t" ] || continue
+		v=$(cat "$t" 2>/dev/null) || continue
+		v=$((v / 1000))
+		[ "$v" -gt "$hottest" ] && hottest=$v
+	done
+
+	if [ "$hottest" -le "$MIN_TEMP" ]; then
+		pwm=$MIN_PWM
+	elif [ "$hottest" -ge "$MAX_TEMP" ]; then
+		pwm=$MAX_PWM
+	else
+		pwm=$(( MIN_PWM + (hottest - MIN_TEMP) * (MAX_PWM - MIN_PWM) / (MAX_TEMP - MIN_TEMP) ))
+	fi
+
+	if [ "$pwm" != "$last" ]; then
+		echo "$pwm" > "$FAN/pwm1"
+		last=$pwm
+	fi
+	sleep "$INTERVAL"
+done

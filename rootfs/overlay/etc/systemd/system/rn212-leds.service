@@ -1,0 +1,16 @@
+[Unit]
+Description=ReadyNAS RN212 front panel LEDs
+After=systemd-udev-settle.service local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Power LED steady on while the system runs; activity LED shows disk I/O.
+ExecStart=/bin/sh -c 'L=/sys/class/leds; \
+  [ -d $L/pwr ] && echo default-on > $L/pwr/trigger; \
+  [ -d $L/act ] && echo disk-activity > $L/act/trigger; \
+  for d in sata1 sata2; do [ -d $L/$d ] && echo none > $L/$d/trigger && echo 1 > $L/$d/brightness; done; true'
+ExecStop=/bin/sh -c 'L=/sys/class/leds; [ -d $L/pwr ] && echo heartbeat > $L/pwr/trigger; true'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,47 @@
+#!/bin/sh
+# rn212-flash-kernel [uImage]
+# Write a kernel uImage to the RN212's NAND "uImage" partition, which the
+# stock U-Boot boots from. Keeps a backup of what was there before and
+# verifies the write by reading it back.
+set -eu
+
+IMG=${1:-/boot/uImage}
+BACKUP_DIR=/var/backups/rn212-nand
+
+die() { echo "rn212-flash-kernel: $*" >&2; exit 1; }
+
+grep -qs 'netgear,readynas-212' /proc/device-tree/compatible ||
+	die "not running on a ReadyNAS RN212, refusing to touch NAND"
+[ -f "$IMG" ] || die "no such image: $IMG"
+mkimage -l "$IMG" >/dev/null 2>&1 || die "$IMG is not a valid U-Boot image"
+
+MTD=$(awk -F: '/"uImage"/ { print $1 }' /proc/mtd)
+[ -n "$MTD" ] || die "no NAND partition named uImage in /proc/mtd"
+DEV=/dev/$MTD
+part_size=$(( 0x$(awk '/"uImage"/ { print $2 }' /proc/mtd) ))
+img_size=$(stat -c %s "$IMG")
+[ "$img_size" -le "$part_size" ] ||
+	die "$IMG is $img_size bytes, partition $DEV holds $part_size"
+
+# Already there? Then nothing to do.
+if nanddump -q -l "$img_size" -f /tmp/rn212-nand.cur "$DEV" 2>/dev/null &&
+   cmp -s /tmp/rn212-nand.cur "$IMG"; then
+	rm -f /tmp/rn212-nand.cur
+	echo "rn212-flash-kernel: $DEV already contains $IMG"
+	exit 0
+fi
+
+mkdir -p "$BACKUP_DIR"
+nanddump -q -f "$BACKUP_DIR/$MTD-previous.bin" "$DEV"
+
+echo "rn212-flash-kernel: writing $IMG ($img_size bytes) to $DEV"
+flash_erase -q "$DEV" 0 0
+nandwrite -q -p "$DEV" "$IMG"
+
+nanddump -q -l "$img_size" -f /tmp/rn212-nand.cur "$DEV"
+if ! cmp -s /tmp/rn212-nand.cur "$IMG"; then
+	rm -f /tmp/rn212-nand.cur
+	die "VERIFY FAILED. Restore with: rn212-flash-kernel $BACKUP_DIR/$MTD-previous.bin"
+fi
+rm -f /tmp/rn212-nand.cur
+echo "rn212-flash-kernel: done, verified. Previous kernel saved in $BACKUP_DIR"

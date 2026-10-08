@@ -1,0 +1,25 @@
+# Build outputs (kernel, rootfs tarball, install bundle, logs)
+/out/
+
+# Unpacked NETGEAR firmware: large, vendor binaries, regenerable from the .img
+/fw/
+
+# Upstream reference checkout (has its own .git)
+/ref/
+
+# Data collected from this unit: NAND dumps, serial number, MAC addresses
+/survey/
+rn212-info-*.tar.gz
+/analysis/
+mtd*-backup.bin
+mtd*-stock-backup.bin
+
+# Per-user SSH key baked into the rootfs (see README)
+/rootfs/authorized_keys
+
+# Editors / macOS
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/

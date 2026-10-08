@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * NETGEAR ReadyNAS RN212 (Annapurna Labs Alpine v1, 4x Cortex-A15, 2 GiB)
+ *
+ * Built on top of the vendor RN202 kernel DT, which the RN212's U-Boot passes
+ * unchanged (bdtype=rn202). This file only fixes up what the vendor tree
+ * leaves to U-Boot (memory, chosen) and drops nodes meant for the vendor
+ * 3.19-era PCIe driver, which the forward-ported al-pci driver doesn't use.
+ *
+ * The DTB is appended to the zImage, so U-Boot's bootargs/initrd are ignored:
+ * the command line below is authoritative.
+ */
+
+/dts-v1/;
+
+/include/ "alpine-rn202-vendor.dtsi"
+
+/ {
+	model = "NETGEAR ReadyNAS RN212";
+	compatible = "netgear,readynas-212", "netgear,readynas-202",
+		     "annapurna-labs,alpine", "al,alpine";
+
+	aliases {
+		serial0 = "/soc/uart0";
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200 earlycon=uart8250,mmio32,0xfd883000 pci=pcie_bus_perf root=/dev/md9 rootfstype=ext4 rootwait raid=autodetect";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x0 0x0 0x80000000>;	/* 2 GiB */
+	};
+
+	gpio_pwr {
+		compatible = "gpio-poweroff";
+	};
+
+	/*
+	 * Clock rates U-Boot normally patches in (vendor tree has 0 / 1 MHz
+	 * placeholders). sbclk: from the stock kernel's UART base_baud
+	 * 23437500 * 16 = 375 MHz. cpuclk: NETGEAR spec 1.4 GHz (unverified).
+	 */
+	soc {
+		uart0 { clock-frequency = <375000000>; };
+		uart1 { clock-frequency = <375000000>; };
+		uart2 { clock-frequency = <375000000>; };
+		uart3 { clock-frequency = <375000000>; };
+
+		clocks {
+			sbclk { clock-frequency = <375000000>; };
+			cpuclk { clock-frequency = <1400000000>; };
+		};
+
+		/delete-node/ pcie-internal-3-19;
+		/delete-node/ pcie-external0;
+		/delete-node/ pcie-external1;
+		/delete-node/ pcie-external2;
+		/delete-node/ spi;		/* duplicate of spi-3-10-20 */
+	};
+};

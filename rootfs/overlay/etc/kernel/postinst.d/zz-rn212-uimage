@@ -1,0 +1,30 @@
+#!/bin/sh
+# Called by the kernel package after install/upgrade: $1 = version,
+# $2 = path to the zImage. Builds /boot/uImage-$1 (zImage + RN212 DTB) and,
+# when running on the NAS itself, flashes it to NAND so the next boot uses it.
+set -e
+
+version=$1
+zimage=${2:-/boot/vmlinuz-$version}
+
+case "$version" in
+*-rn212*) ;;
+*) exit 0 ;;   # some other kernel flavour: not bootable here
+esac
+
+dtb=$(find "/usr/lib/linux-image-$version" -name alpine-rn212.dtb 2>/dev/null | head -n1)
+[ -n "$dtb" ] || { echo "zz-rn212-uimage: alpine-rn212.dtb not found for $version" >&2; exit 1; }
+
+tmp=$(mktemp)
+cat "$zimage" "$dtb" > "$tmp"
+mkimage -A arm -O linux -T kernel -C none -a 0x8000 -e 0x8000 \
+	-n "Linux-$version" -d "$tmp" "/boot/uImage-$version" >/dev/null
+rm -f "$tmp"
+ln -sf "uImage-$version" /boot/uImage
+echo "zz-rn212-uimage: built /boot/uImage-$version"
+
+if [ "${RN212_NO_FLASH:-0}" != 1 ] && grep -qs 'netgear,readynas-212' /proc/device-tree/compatible; then
+	/usr/local/sbin/rn212-flash-kernel "/boot/uImage-$version"
+else
+	echo "zz-rn212-uimage: not on the RN212 (or RN212_NO_FLASH=1): NAND not touched"
+fi

@@ -1,0 +1,6 @@
+# rn212-fan curve: hottest sensor (SoC or disk) in °C -> PWM 0..255
+MIN_TEMP=40
+MAX_TEMP=60
+MIN_PWM=70
+MAX_PWM=255
+INTERVAL=10
