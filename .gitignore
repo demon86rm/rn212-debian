@@ -23,3 +23,7 @@ mtd*-stock-backup.bin
 *~
 .vscode/
 .idea/
+
+# NETGEAR firmware (input to ./build.sh bundle)
+ReadyNASOS-*.zip
+*.img
