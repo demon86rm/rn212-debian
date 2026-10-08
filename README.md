@@ -6,6 +6,15 @@ Debian (trixie, armhf) on Linux 6.6 LTS, updated through `apt`.
 **Status: built, not yet booted on hardware.** Expect to need a serial console
 for the first boot.
 
+### Next steps (as of 2026-10-08)
+1. Grab the live device tree from the stock OS to verify the clock values in
+   `kernel/dts/alpine-rn212.dts` (cpuclk 1.4 GHz is unverified):
+   `ssh root@NAS 'tar chf - -C /sys/firmware/devicetree base' > survey/live-dt.tar`
+2. Install with `FLASH=0`, then test boot from the USB stick (see Install).
+3. Ideally have a 3.3 V USB-serial adapter on the board UART for the first boot.
+
+(`PLAN.md` is the original analysis; this README is current.)
+
 ## How it works
 
 | Piece | Source |
