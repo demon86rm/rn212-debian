@@ -2,6 +2,7 @@
 # Build the Debian armhf root filesystem for the RN212 (inside the container).
 #   /work  = project, /build = case-sensitive scratch volume
 # Needs: out/kernel-<ver>/linux-image-*.deb and rootfs/authorized_keys.
+# KERNEL_ONLY=1 reuses the previous rootfs (only overlay + kernel refreshed).
 # Output: out/rootfs-rn212-<suite>.tar.xz, out/mtd-tools/
 set -euo pipefail
 
@@ -25,6 +26,11 @@ if [ ! -e /proc/sys/fs/binfmt_misc/qemu-arm ]; then
 		> /proc/sys/fs/binfmt_misc/register
 fi
 
+# KERNEL_ONLY=1: keep the existing rootfs, refresh overlay + kernel, repack.
+if [ "${KERNEL_ONLY:-0}" = 1 ] && [ -d "$ROOT/etc" ]; then
+	cp -a /work/rootfs/overlay/. "$ROOT"/
+	chmod 0755 "$ROOT"/usr/local/sbin/* "$ROOT"/etc/kernel/postinst.d/zz-rn212-uimage
+else
 # --- debootstrap ------------------------------------------------------------
 PKGS=(
 	systemd-sysv systemd-resolved systemd-timesyncd udev kmod dbus
@@ -102,6 +108,8 @@ WantedBy=multi-user.target
 EOT
 systemctl enable rn212-ssh-hostkeys.service >/dev/null 2>&1
 EOF
+
+fi
 
 # Kernel package (hook builds /boot/uImage; no NAND flashing in the chroot).
 cp "$kdeb" "$ROOT/tmp/"

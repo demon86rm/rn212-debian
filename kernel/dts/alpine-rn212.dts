@@ -39,10 +39,17 @@
 	};
 
 	/*
-	 * Clock rates U-Boot normally patches in (vendor tree has 0 / 1 MHz
-	 * placeholders). sbclk: from the stock kernel's UART base_baud
-	 * 23437500 * 16 = 375 MHz. cpuclk: NETGEAR spec 1.4 GHz (unverified).
+	 * Values U-Boot patches into the vendor tree at boot (which has 0 / 1 MHz
+	 * placeholders), taken from the live tree of a running RN212
+	 * (/sys/firmware/devicetree, stock OS 6.10.10).
 	 */
+	cpus {
+		cpu@0 { clock-frequency = <1400000000>; };
+		cpu@1 { clock-frequency = <1400000000>; };
+		cpu@2 { clock-frequency = <1400000000>; };
+		cpu@3 { clock-frequency = <1400000000>; };
+	};
+
 	soc {
 		uart0 { clock-frequency = <375000000>; };
 		uart1 { clock-frequency = <375000000>; };
@@ -50,9 +57,15 @@
 		uart3 { clock-frequency = <375000000>; };
 
 		clocks {
-			sbclk { clock-frequency = <375000000>; };
+			refclk { clock-frequency = <100000000>; };
+			sbclk  { clock-frequency = <375000000>; };
+			nbclk  { clock-frequency = <800000000>; };
 			cpuclk { clock-frequency = <1400000000>; };
 		};
+
+		/* Port 2 has nothing attached; U-Boot disables it (and never
+		 * initialises the controller), so don't let al-pci probe it. */
+		pcie-external2-3-10 { status = "disabled"; };
 
 		/delete-node/ pcie-internal-3-19;
 		/delete-node/ pcie-external0;

@@ -14,7 +14,7 @@ VOLUME=rn212-build-cache   # case-sensitive scratch space (kernel tree, rootfs)
 run() {
 	podman run --rm -i $([ -t 0 ] && echo -t) --privileged \
 		-v "$PWD":/work -v "$VOLUME":/build \
-		-e KVER -e JOBS -e CLEAN \
+		-e KVER -e JOBS -e CLEAN -e KERNEL_ONLY \
 		"$IMAGE" "$@"
 }
 
