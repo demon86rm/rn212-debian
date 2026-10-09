@@ -42,11 +42,14 @@ for the first boot.
 2. Install Debian on disk 2 **without touching NAND**:
    `ssh -t root@NAS 'FLASH=0 sh /root/rn212/install-from-stock.sh'`, type `INSTALL`.
    Disk 1 keeps the stock OS. Disk 2 gets Debian on `/dev/md9`.
-3. **Test boot from USB**: copy `out/install/usb-boot/*` to a FAT32 stick, plug it
-   into the NAS, reboot. Stock U-Boot loads `uImage-recovery` from the stick
-   (it checks for `NTGR_USBBOOT_INFO.txt` on every boot). Debian comes up on
-   DHCP, hostname `rn212`: `ssh -i ~/.ssh/readynas_ed25519 root@<ip>`.
-   No stick → stock OS boots as before.
+3. **Test boot from USB**: `poweroff`, pull the stock disk, copy
+   `out/install/usb-boot/*` to a FAT32 (MBR) stick in the **front** port, then
+   **hold the Backup button, press power, keep Backup held ~15 s**. Only then
+   does U-Boot load `uImage-recovery` from the stick. Debian comes up on DHCP,
+   hostname `rn212`: `ssh -i ~/.ssh/readynas_ed25519 root@<ip>`.
+   **Without the Backup button** U-Boot boots stock from NAND, and the stock
+   initrd factory-installs ReadyNAS OS onto the Debian disk (seen 2026-10-09).
+   Never boot stock with the Debian disk inserted.
 4. When Debian works: `rn212-flash-kernel` (backs up mtd2, writes, verifies),
    remove the stick, reboot.
 5. Once happy: `rn212-mirror-disk` (wipes disk 1, mirrors root, creates the
@@ -61,7 +64,7 @@ for the first boot.
 - Until `rn212-mirror-disk` runs, disk 1 still has a bootable stock OS. Only the
   stock kernel needs to go back into mtd2 (serial console, or NETGEAR's USB
   recovery image: a FAT USB stick with `NTGR_USBBOOT_INFO.txt`, `uImage-recovery`
-  and `initrd-recovery.gz`, which U-Boot checks on every boot).
+  and `initrd-recovery.gz`, booted by holding Backup at power-on).
 
 ## Layout
 

@@ -91,10 +91,22 @@ pgrep -x readynasd >/dev/null && die "a readynasd process is still running"
 step "Removing $DISK from the stock RAID arrays"
 swapoff -a || true
 for md in $(awk '/^md/ { print $1 }' /proc/mdstat); do
-	for p in $(mdadm --detail "/dev/$md" | awk -v d="$DISK" '$NF ~ "^"d { print $NF }'); do
-		echo "  $md: removing $p"
-		mdadm "/dev/$md" --fail "$p" --remove "$p" || true
-	done
+	members=$(mdadm --detail "/dev/$md" | awk '$NF ~ "^/dev/sd" { print $NF }')
+	ours=$(echo "$members" | grep "^$DISK" || true)
+	[ -n "$ours" ] || continue
+	if [ -z "$(echo "$members" | grep -v "^$DISK" || true)" ]; then
+		# Array lives entirely on the target disk (e.g. a factory install
+		# ReadyNAS put there): stop it instead of failing its last member.
+		echo "  $md: lives only on $DISK, stopping it"
+		umount "/dev/$md" 2>/dev/null || true
+		swapoff "/dev/$md" 2>/dev/null || true
+		mdadm --stop "/dev/$md"
+	else
+		for p in $ours; do
+			echo "  $md: removing $p"
+			mdadm "/dev/$md" --fail "$p" --remove "$p" || true
+		done
+	fi
 done
 sleep 2
 if grep -q "${DISK#/dev/}[0-9]" /proc/mdstat; then
@@ -137,8 +149,11 @@ auto-repair would pull $DISK back into the stock arrays and overwrite Debian.
 
   1. poweroff                      (now; not reboot)
   2. remove the OTHER disk ($OTHER, stock OS), keep $DISK in
-  3. plug in the USB stick (usb-boot/* on FAT32), power on
+  3. plug the USB stick (usb-boot/* on FAT32) into the FRONT port, then
+     HOLD the Backup button, press power, keep Backup held ~15 s
      -> U-Boot boots the new kernel from the stick, Debian from $DISK
+     WITHOUT the Backup button U-Boot boots stock from NAND, and stock
+     factory-installs itself over $DISK (Debian is lost, re-run this script)
   To go back to stock: power off, stock disk in, Debian disk out, no stick.
 When Debian works, make it permanent from Debian itself:
     rn212-flash-kernel        (backs up + writes + verifies NAND)
