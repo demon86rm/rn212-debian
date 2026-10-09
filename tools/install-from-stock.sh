@@ -24,8 +24,18 @@ MNT=/mnt/rn212-root
 MT=$(pwd)/mtd-tools
 mtd() { "$MT/lib/ld-linux-armhf.so.3" --library-path "$MT/lib" "$MT/$@"; }
 
+CURRENT_STEP="checks"
 die() { echo "ERROR: $*" >&2; exit 1; }
-step() { echo; echo "==> $*"; }
+step() { CURRENT_STEP=$*; echo; echo "==> $*"; }
+on_exit() {
+	rc=$?
+	[ "$rc" = 0 ] && return
+	echo >&2
+	echo "!! install-from-stock.sh FAILED (exit $rc) during: $CURRENT_STEP" >&2
+	echo "!! NAND is untouched unless that step was the NAND write." >&2
+	echo "!! Do NOT reboot with both disks in; send the output above." >&2
+}
+trap on_exit EXIT
 
 [ "$(id -u)" = 0 ] || die "run as root"
 grep -q 'bdtype=rn202' /proc/cmdline || die "this does not look like a ReadyNAS RN212 (no bdtype=rn202)"
@@ -70,6 +80,14 @@ step "Backing up NAND kernel partition"
 dd if=/dev/mtd2ro of=mtd2-stock-backup.bin bs=128k 2>/dev/null
 md5sum mtd2-stock-backup.bin
 
+step "Stopping readynasd (X-RAID would re-add $DISK to its arrays instantly)"
+# --runtime: the mask disappears at the next boot.
+systemctl mask --runtime readynasd.service >/dev/null 2>&1 || true
+systemctl stop readynasd.service
+sleep 2
+systemctl is-active --quiet readynasd.service && die "readynasd is still running"
+pgrep -x readynasd >/dev/null && die "a readynasd process is still running"
+
 step "Removing $DISK from the stock RAID arrays"
 swapoff -a || true
 for md in $(awk '/^md/ { print $1 }' /proc/mdstat); do
@@ -78,6 +96,11 @@ for md in $(awk '/^md/ { print $1 }' /proc/mdstat); do
 		mdadm "/dev/$md" --fail "$p" --remove "$p" || true
 	done
 done
+sleep 2
+if grep -q "${DISK#/dev/}[0-9]" /proc/mdstat; then
+	cat /proc/mdstat
+	die "$DISK is still part of a RAID array (see above), refusing to wipe it"
+fi
 for p in "$DISK"[0-9]*; do
 	[ -b "$p" ] && mdadm --zero-superblock "$p" 2>/dev/null || true
 done
@@ -108,8 +131,15 @@ if [ "$FLASH" != 1 ]; then
 	cat <<EOF
 
 Debian is on $DISK, NAND NOT touched (FLASH=0).
-Test boot: copy usb-boot/* to a FAT32 USB stick, plug it into the NAS, reboot.
-U-Boot boots the new kernel from the stick. Without the stick it boots stock.
+
+IMPORTANT: never boot the stock OS while this disk is inserted: its X-RAID
+auto-repair would pull $DISK back into the stock arrays and overwrite Debian.
+
+  1. poweroff                      (now; not reboot)
+  2. remove the OTHER disk ($OTHER, stock OS), keep $DISK in
+  3. plug in the USB stick (usb-boot/* on FAT32), power on
+     -> U-Boot boots the new kernel from the stick, Debian from $DISK
+  To go back to stock: power off, stock disk in, Debian disk out, no stick.
 When Debian works, make it permanent from Debian itself:
     rn212-flash-kernel        (backs up + writes + verifies NAND)
 then remove the stick.
@@ -129,7 +159,9 @@ echo "  verified"
 
 cat <<EOF
 
-Done. Reboot to start Debian:   reboot
+Done. Power off now (not reboot):   poweroff
+Then remove the stock disk ($OTHER): with it inserted, a stock boot would
+pull $DISK back into its arrays. The next boot (NAND kernel) starts Debian.
   - SSH:    ssh root@<nas-ip>        (key-only; hostname 'rn212', DHCP)
   - Serial: 115200 8N1 shows the boot log.
 Then, on Debian, mirror onto the first disk (wipes the stock OS):
