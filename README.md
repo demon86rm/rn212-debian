@@ -6,12 +6,20 @@ Debian (trixie, armhf) on Linux 6.6 LTS, updated through `apt`.
 **Status: built, not yet booted on hardware.** Expect to need a serial console
 for the first boot.
 
-### Next steps (as of 2026-10-08)
-1. Grab the live device tree from the stock OS to verify the clock values in
-   `kernel/dts/alpine-rn212.dts` (cpuclk 1.4 GHz is unverified):
-   `ssh root@NAS 'tar chf - -C /sys/firmware/devicetree base' > survey/live-dt.tar`
-2. Install with `FLASH=0`, then test boot from the USB stick (see Install).
-3. Ideally have a 3.3 V USB-serial adapter on the board UART for the first boot.
+### Status (2026-10-09) — on hold until the serial adapter arrives
+- Clocks verified against the live DT (`survey/live-dt.tar`); PCIe port 2 disabled.
+- Debian installed on DISK2 (WD-…055924, `/dev/md9`). DISK1 (WD-…2152822,
+  stock OS) is out of the box, untouched. NAND untouched.
+- USB boot (Backup button held) is taken: steady power LED and no network,
+  vs. stock with no disks: blinking LED and network up after ~1 min.
+- First Debian boot attempt: **no DHCP request / no ping in 10 min**. Cause
+  unknown (early kernel hang, root `md9` not found, or network).
+
+### Next steps
+1. CH340G USB-TTL adapter (3.3 V!, ordered). Find the RN212 UART header and
+   pinout, connect GND/TX/RX only, 115200 8N1, and capture the boot log.
+2. Fallback without serial: heartbeat LED in the DT, plus an initramfs in the
+   USB kernel that writes `dmesg` to the stick (`bootlog.txt`).
 
 (`PLAN.md` is the original analysis; this README is current.)
 
