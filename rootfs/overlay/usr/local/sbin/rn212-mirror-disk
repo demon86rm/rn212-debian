@@ -13,7 +13,10 @@ die() { echo "rn212-mirror-disk: $*" >&2; exit 1; }
 # Disk that holds the running root (member of md9).
 root_part=$(mdadm --detail /dev/md9 | awk '/active sync/ { print $NF; exit }')
 [ -n "$root_part" ] || die "cannot find an active member of /dev/md9"
-src=/dev/$(lsblk -no PKNAME "$root_part")
+# -d: without it lsblk also lists the partition's holders (md9) and prints
+# more than one line, which made src garbage and dst the root disk.
+src=/dev/$(lsblk -ndo PKNAME "$root_part")
+[ -b "$src" ] || die "cannot work out the disk under $root_part (got '$src')"
 
 # The other internal disk.
 dst=
@@ -21,10 +24,20 @@ for d in /dev/sda /dev/sdb; do
 	[ -b "$d" ] && [ "$d" != "$src" ] && dst=$d
 done
 [ -n "$dst" ] || die "no second disk found"
+case "$root_part" in
+"$dst"*) die "refusing: $dst holds the running root ($root_part)" ;;
+esac
+
+src_size=$(blockdev --getsize64 "$src")
+dst_size=$(blockdev --getsize64 "$dst")
+[ "$dst_size" -ge "$src_size" ] ||
+	die "$dst ($dst_size bytes) is smaller than $src ($src_size bytes)"
 
 echo "Root (Debian) disk : $src"
 echo "Disk to be WIPED   : $dst"
 lsblk -o NAME,SIZE,MODEL,SERIAL "$dst"
+smartctl -H "$dst" | grep -i 'overall-health' ||
+	echo "(no SMART health verdict for $dst; check it with smartctl -a)"
 printf 'Type WIPE to erase %s and mirror onto it: ' "$dst"
 read -r answer
 [ "$answer" = WIPE ] || die "aborted"
@@ -47,6 +60,9 @@ sgdisk --zap-all "$dst"
 sgdisk -R "$dst" "$src"      # copy partition table src -> dst
 sgdisk -G "$dst"             # new GUIDs
 partprobe "$dst"; udevadm settle
+# Old stock filesystems (btrfs/ext4) can sit at the same offsets as the new
+# partitions; clear them so mdadm/mkfs don't stop to ask.
+wipefs -a "${dst}1" "${dst}2"
 
 mdadm /dev/md9 --add "${dst}1"
 
@@ -56,10 +72,11 @@ if ! mdadm --detail /dev/md10 >/dev/null 2>&1; then
 	mdadm --zero-superblock "$src_data" 2>/dev/null || true
 	mdadm --create /dev/md10 --run --metadata=1.2 --level=1 --raid-devices=2 \
 		--bitmap=internal "$src_data" "$dst_data"
-	mkfs.ext4 -L data -m 0 -E lazy_itable_init=1 /dev/md10
+	mkfs.ext4 -F -L data -m 0 -E lazy_itable_init=1 /dev/md10
 	mkdir -p /srv/data
 	grep -q '^/dev/md10' /etc/fstab ||
 		echo '/dev/md10        /srv/data      ext4    defaults,noatime,nofail    0      2' >> /etc/fstab
+	systemctl daemon-reload
 	mount /srv/data
 fi
 

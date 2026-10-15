@@ -4,11 +4,14 @@ Replaces the end-of-life ReadyNAS OS 6 (Debian 8, Linux 4.4) with current
 Debian (trixie, armhf) on Linux 6.6 LTS, updated through `apt`.
 
 **Status: Debian boots standalone from NAND (no USB stick), network and fan
-control working.** DISK1 not mirrored yet.
+control working.** Both disks mirrored (root `md9`, data `md10` on
+`/srv/data`).
 
 ### Status (2026-10-15)
-- Debian installed on DISK2 (WD-…055924, `/dev/md9`). DISK1 (WD-…2152822,
-  stock OS) is out of the box, untouched.
+- Debian installed on DISK2 (WD-…055924), then `rn212-mirror-disk` wiped
+  DISK1 (WD-…2152822, stock OS) and mirrored it: root RAID1 `md9` (32G,
+  metadata 0.90) and data RAID1 `md10` (2.7T ext4, `/srv/data`). Both disks
+  are WD30EFRX with ~64k power-on hours: keep backups, plan replacements.
 - Kernel flashed to NAND mtd2 (2026-10-15, via the `linux-image` .deb and its
   postinst hook); stock mtd2 saved in `/var/backups/rn212-nand/` (md5
   `bc41c7f5…`). Plain power-on boots Debian to `rn212 login:`; DHCP, SSH and
@@ -28,7 +31,7 @@ control working.** DISK1 not mirrored yet.
   four cores loaded. The SoC sensor needed a `thermal-zones` node in the DT.
 
 ### Next steps
-1. Mirror DISK1 into the root RAID (`rn212-mirror-disk`, wipes DISK1).
+1. RAID monitoring: `mdadm` has no `MAILADDR` / notification target yet.
 
 (`PLAN.md` is the original analysis; this README is current.)
 
