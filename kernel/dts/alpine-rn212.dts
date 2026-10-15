@@ -80,8 +80,9 @@
 
 	/*
 	 * SoC temperature only; the fan (G762) has no cooling-device support,
-	 * so fan control stays in userspace. "hot" just logs: no critical trip
-	 * until the sensor's readings are known to be sane.
+	 * so fan control stays in userspace (rn212-fan). "hot" just logs;
+	 * "critical" makes the kernel shut down (orderly, then forced).
+	 * Measured: ~41 °C idle, ~60 °C with all four cores loaded.
 	 */
 	thermal-zones {
 		soc-thermal {
@@ -94,6 +95,12 @@
 					temperature = <95000>;
 					hysteresis = <5000>;
 					type = "hot";
+				};
+
+				soc-crit {
+					temperature = <105000>;
+					hysteresis = <0>;
+					type = "critical";
 				};
 			};
 		};
