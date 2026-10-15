@@ -63,6 +63,10 @@
 			cpuclk { clock-frequency = <1400000000>; };
 		};
 
+		/* Mainline thermal_of needs the sensor referenced from a
+		 * thermal zone, or al_thermal fails to register. */
+		soc_thermal: thermal { #thermal-sensor-cells = <0>; };
+
 		/* Port 2 has nothing attached; U-Boot disables it (and never
 		 * initialises the controller), so don't let al-pci probe it. */
 		pcie-external2-3-10 { status = "disabled"; };
@@ -72,5 +76,26 @@
 		/delete-node/ pcie-external1;
 		/delete-node/ pcie-external2;
 		/delete-node/ spi;		/* duplicate of spi-3-10-20 */
+	};
+
+	/*
+	 * SoC temperature only; the fan (G762) has no cooling-device support,
+	 * so fan control stays in userspace. "hot" just logs: no critical trip
+	 * until the sensor's readings are known to be sane.
+	 */
+	thermal-zones {
+		soc-thermal {
+			polling-delay-passive = <0>;
+			polling-delay = <5000>;
+			thermal-sensors = <&soc_thermal>;
+
+			trips {
+				soc-hot {
+					temperature = <95000>;
+					hysteresis = <5000>;
+					type = "hot";
+				};
+			};
+		};
 	};
 };

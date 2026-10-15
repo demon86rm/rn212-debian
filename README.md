@@ -11,8 +11,7 @@ flashed yet.
   stock OS) is out of the box, untouched. NAND untouched.
 - Test boot: kernel from the USB stick (Backup button held), root on DISK2.
   Reaches `rn212 login:` on ttyS0; DHCP, SSH and apt work.
-- Serial console: 2x2 header, 3.3 V, 115200 8N1. Top-left = NAS RX,
-  top-right ("P") = NAS TX, bottom-left = GND, bottom-right unused (VCC).
+- Serial console works (see [Serial console](#serial-console)).
 - Fixes found with the console:
   - SoC AHCI reports `PORTS_IMPL=0`, so all ports came up DUMMY and `md9` was
     never found (the 2026-10-09 "no DHCP" failure). `kernel/patches/170-*`
@@ -21,11 +20,13 @@ flashed yet.
     100% RX CRC errors.
   - `al_eth` sets `ndo_eth_ioctl`, so MII ioctls (phytool, mii-tool) work.
 - Measured: iperf3 ~810 Mbit/s RX, ~650 Mbit/s TX, 0 CRC/link errors.
+- Fan: `rn212-fan` drives the G762 in DC mode (the stock fan barely reacts to
+  PWM mode; stalls below ~10). Separate SoC (55–80 °C) and disk (38–50 °C)
+  curves, floor 25 (~1400 RPM, quiet). SoC idles ~41 °C, ~60 °C with all
+  four cores loaded. The SoC sensor needed a `thermal-zones` node in the DT.
 
 ### Next steps
-1. Fan runs at 100%: add the I2C controller with the G762 fan controller,
-   DS1337 RTC and PCA9548 mux to the DT (as in the live DT), then a fan curve.
-2. Flash the kernel to NAND and boot without the USB stick; mirror DISK1.
+1. Flash the kernel to NAND and boot without the USB stick; mirror DISK1.
 
 (`PLAN.md` is the original analysis; this README is current.)
 
@@ -39,6 +40,31 @@ flashed yet.
 | Boot | U-Boot loads the NAND `uImage` partition (mtd2): zImage + appended DTB. Command line comes from the DTB |
 | Root | ext4 on `/dev/md9`: RAID1, metadata 0.90, auto-assembled by the kernel (no initramfs) |
 | Updates | `apt upgrade`; kernel packages are local `.deb`s; a postinst hook rebuilds `/boot/uImage` and flashes it to NAND (backup + verify) |
+
+## Serial console
+
+4-pin (2x2) header on the mainboard. 3.3 V TTL, 115200 8N1. Orient it by the
+pin marked "P" (top-right):
+
+    +-----------+-----------+
+    |  NAS RX   |  NAS TX   |   <- top-right is marked "P"
+    | (adapter  | (adapter  |
+    |   TXD)    |   RXD)    |
+    +-----------+-----------+
+    |   GND     |  VCC?     |
+    |           | (unused,  |
+    |           | leave it  |
+    |           |  open)    |
+    +-----------+-----------+
+
+- Use a **3.3 V** USB-TTL adapter (tested: CH340G). Connect GND, TX, RX only;
+  NAS RX works straight from the adapter's TXD, no resistor needed.
+- Wire GND: without it you only get 00/80/f8 garbage bytes.
+- The pins are a tight fit for Dupont jumpers; intermittent contact shows up
+  as bursts of garbage. Press-fit or test hooks help.
+- U-Boot, the kernel and a getty (`rn212 login:`) all use this port, on both
+  stock ReadyNAS OS and this Debian.
+- macOS: `screen /dev/tty.usbserial-* 115200` (or `picocom -b 115200`).
 
 ## Build (on the Mac)
 

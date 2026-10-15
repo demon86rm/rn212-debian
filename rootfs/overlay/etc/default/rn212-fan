@@ -1,6 +1,10 @@
-# rn212-fan curve: hottest sensor (SoC or disk) in °C -> PWM 0..255
-MIN_TEMP=40
-MAX_TEMP=60
-MIN_PWM=70
+# rn212-fan curves: °C -> PWM, linear between MIN and MAX; highest wins.
+# SoC idles ~41 °C, disks ~28 °C. PWM 25 ≈ 1400 RPM (quiet); stall < 10.
+SOC_MIN_TEMP=55
+SOC_MAX_TEMP=80
+DISK_MIN_TEMP=38
+DISK_MAX_TEMP=50
+MIN_PWM=25
 MAX_PWM=255
+STEP_DOWN=10
 INTERVAL=10

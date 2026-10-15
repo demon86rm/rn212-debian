@@ -1,12 +1,16 @@
 #!/bin/sh
 # rn212-fan: simple fan curve for the ReadyNAS RN212.
-# Fan controller: GMT G762 (hwmon "g762"), driven open-loop through pwm1.
-# Inputs: every hwmon temp*_input on the box (SoC thermal sensor, disks via
-# the drivetemp module); the hottest one decides.
+# Fan controller: GMT G762 (hwmon "g762"), open loop, DC mode (the stock fan
+# is voltage-controlled: PWM mode barely changes its speed; stalls below ~10).
+# Inputs: the SoC sensor (hwmon "soc_thermal") and the disks (drivetemp).
+# Each has its own curve; the highest PWM wins.
 #
-# Curve (°C -> PWM 0..255), linear between points; tune in
-# /etc/default/rn212-fan.
-MIN_TEMP=40 MAX_TEMP=60 MIN_PWM=70 MAX_PWM=255 INTERVAL=10
+# Curves (°C -> PWM), linear between MIN and MAX; tune in
+# /etc/default/rn212-fan. Failsafe: full speed when no temperature can be
+# read or the fan reports 0 RPM.
+SOC_MIN_TEMP=55 SOC_MAX_TEMP=80
+DISK_MIN_TEMP=38 DISK_MAX_TEMP=50
+MIN_PWM=25 MAX_PWM=255 STEP_DOWN=10 INTERVAL=10
 [ -r /etc/default/rn212-fan ] && . /etc/default/rn212-fan
 
 find_g762() {
@@ -16,28 +20,57 @@ find_g762() {
 	return 1
 }
 
+# curve TEMP MIN_TEMP MAX_TEMP -> PWM
+curve() {
+	if [ "$1" -le "$2" ]; then
+		echo "$MIN_PWM"
+	elif [ "$1" -ge "$3" ]; then
+		echo "$MAX_PWM"
+	else
+		echo $(( MIN_PWM + ($1 - $2) * (MAX_PWM - MIN_PWM) / ($3 - $2) ))
+	fi
+}
+
 modprobe drivetemp 2>/dev/null || true
 
 FAN=$(find_g762) || { echo "rn212-fan: no g762 hwmon device found" >&2; exit 1; }
-echo 1 > "$FAN/pwm1_enable"          # 1 = open loop, pwm1 sets duty cycle
+echo 1 > "$FAN/pwm1_enable"          # 1 = open loop, pwm1 sets the level
+echo 0 > "$FAN/pwm1_mode"            # 0 = DC output
 trap 'echo "$MAX_PWM" > "$FAN/pwm1"; exit 0' INT TERM
 
 last=-1
+warned=
 while :; do
-	hottest=0
-	for t in /sys/class/hwmon/hwmon*/temp*_input; do
-		[ -r "$t" ] || continue
-		v=$(cat "$t" 2>/dev/null) || continue
-		v=$((v / 1000))
-		[ "$v" -gt "$hottest" ] && hottest=$v
+	want=-1
+	for h in /sys/class/hwmon/hwmon*; do
+		case "$(cat "$h/name" 2>/dev/null)" in
+		soc_thermal|al_thermal) lo=$SOC_MIN_TEMP hi=$SOC_MAX_TEMP ;;
+		drivetemp)              lo=$DISK_MIN_TEMP hi=$DISK_MAX_TEMP ;;
+		*) continue ;;
+		esac
+		for t in "$h"/temp*_input; do
+			v=$(cat "$t" 2>/dev/null) || continue
+			p=$(curve $((v / 1000)) "$lo" "$hi")
+			[ "$p" -gt "$want" ] && want=$p
+		done
 	done
 
-	if [ "$hottest" -le "$MIN_TEMP" ]; then
-		pwm=$MIN_PWM
-	elif [ "$hottest" -ge "$MAX_TEMP" ]; then
+	why=
+	if [ "$want" -lt 0 ]; then
+		why="no temperature readable"
+	elif [ "$last" -gt 0 ] && [ "$(cat "$FAN/fan1_input" 2>/dev/null)" = 0 ]; then
+		why="fan reports 0 RPM at pwm $last"
+	fi
+
+	if [ -n "$why" ]; then
+		[ "$warned" = "$why" ] || echo "rn212-fan: $why, full speed" >&2
+		warned=$why
 		pwm=$MAX_PWM
 	else
-		pwm=$(( MIN_PWM + (hottest - MIN_TEMP) * (MAX_PWM - MIN_PWM) / (MAX_TEMP - MIN_TEMP) ))
+		warned=
+		pwm=$want
+		# Speed up at once, slow down gradually.
+		[ "$last" -ge 0 ] && [ "$pwm" -lt $((last - STEP_DOWN)) ] && pwm=$((last - STEP_DOWN))
 	fi
 
 	if [ "$pwm" != "$last" ]; then
