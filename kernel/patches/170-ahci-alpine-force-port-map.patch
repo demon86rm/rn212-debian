@@ -1,0 +1,28 @@
+From: rn212-debian
+Subject: [PATCH] ata: ahci: force port map on Annapurna Labs Alpine AHCI
+
+The Alpine internal AHCI (1c36:0031) reports AHCI 1.3 with PORTS_IMPL = 0.
+Since mainline only fabricates a port map for AHCI < 1.3, all four ports
+come up as DUMMY and the ReadyNAS RN212 bay disks (ata1/ata2 on stock) are
+never seen. The stock 4.x kernel logs "forcing PORTS_IMPL to 0xf" here.
+---
+--- a/drivers/ata/ahci.c
++++ b/drivers/ata/ahci.c
+@@ -773,6 +773,17 @@
+ 	}
+ 
+ 	/*
++	 * The Alpine SoC AHCI reports AHCI 1.3 with PORTS_IMPL = 0, so libahci
++	 * no longer fabricates a port map for it and every port ends up DUMMY.
++	 * Force all 4 ports, as the stock ReadyNAS kernel does.
++	 */
++	if (pdev->vendor == PCI_VENDOR_ID_AMAZON_ANNAPURNA_LABS &&
++	    pdev->device == 0x0031) {
++		dev_info(&pdev->dev, "Alpine AHCI: forcing port_map 0xf\n");
++		hpriv->saved_port_map = 0xf;
++	}
++
++	/*
+ 	 * Temporary Marvell 6145 hack: PATA port presence
+ 	 * is asserted through the standard AHCI port
+ 	 * presence register, as bit 4 (counting from 0)

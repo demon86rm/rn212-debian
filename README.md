@@ -3,23 +3,29 @@
 Replaces the end-of-life ReadyNAS OS 6 (Debian 8, Linux 4.4) with current
 Debian (trixie, armhf) on Linux 6.6 LTS, updated through `apt`.
 
-**Status: built, not yet booted on hardware.** Expect to need a serial console
-for the first boot.
+**Status: boots Debian from a USB-loaded kernel, network working.** NAND not
+flashed yet.
 
-### Status (2026-10-09) — on hold until the serial adapter arrives
-- Clocks verified against the live DT (`survey/live-dt.tar`); PCIe port 2 disabled.
+### Status (2026-10-15)
 - Debian installed on DISK2 (WD-…055924, `/dev/md9`). DISK1 (WD-…2152822,
   stock OS) is out of the box, untouched. NAND untouched.
-- USB boot (Backup button held) is taken: steady power LED and no network,
-  vs. stock with no disks: blinking LED and network up after ~1 min.
-- First Debian boot attempt: **no DHCP request / no ping in 10 min**. Cause
-  unknown (early kernel hang, root `md9` not found, or network).
+- Test boot: kernel from the USB stick (Backup button held), root on DISK2.
+  Reaches `rn212 login:` on ttyS0; DHCP, SSH and apt work.
+- Serial console: 2x2 header, 3.3 V, 115200 8N1. Top-left = NAS RX,
+  top-right ("P") = NAS TX, bottom-left = GND, bottom-right unused (VCC).
+- Fixes found with the console:
+  - SoC AHCI reports `PORTS_IMPL=0`, so all ports came up DUMMY and `md9` was
+    never found (the 2026-10-09 "no DHCP" failure). `kernel/patches/170-*`
+    forces the port map, as the stock 4.4 kernel did.
+  - `al_eth` attaches the AR8035 PHYs as `RGMII_ID`; plain `RGMII` meant
+    100% RX CRC errors.
+  - `al_eth` sets `ndo_eth_ioctl`, so MII ioctls (phytool, mii-tool) work.
+- Measured: iperf3 ~810 Mbit/s RX, ~650 Mbit/s TX, 0 CRC/link errors.
 
 ### Next steps
-1. CH340G USB-TTL adapter (3.3 V!, ordered). Find the RN212 UART header and
-   pinout, connect GND/TX/RX only, 115200 8N1, and capture the boot log.
-2. Fallback without serial: heartbeat LED in the DT, plus an initramfs in the
-   USB kernel that writes `dmesg` to the stick (`bootlog.txt`).
+1. Fan runs at 100%: add the I2C controller with the G762 fan controller,
+   DS1337 RTC and PCA9548 mux to the DT (as in the live DT), then a fan curve.
+2. Flash the kernel to NAND and boot without the USB stick; mirror DISK1.
 
 (`PLAN.md` is the original analysis; this README is current.)
 

@@ -23,14 +23,17 @@ fi
 if [ "${CLEAN:-0}" = 1 ] || [ ! -f "$SRC/.rn212-patched" ]; then
 	rm -rf "$SRC"
 	tar -C /build -xf "$tarball"
-	# Vendor/forward-ported Alpine sources (overwrite mainline mach-alpine).
-	cp -a "$K"/files/. "$SRC"/
 	for p in "$K"/patches/*.patch; do
 		echo ">> applying $(basename "$p")"
 		patch -d "$SRC" -p1 --forward --no-backup-if-mismatch < "$p"
 	done
 	touch "$SRC/.rn212-patched"
 fi
+
+# Vendor/forward-ported Alpine sources (overwrite mainline mach-alpine).
+# Synced on every build so incremental builds pick up edits; no patch touches
+# these files, and cp -a keeps mtimes so unchanged files don't rebuild.
+cp -a "$K"/files/. "$SRC"/
 
 # Device tree (always refreshed, cheap).
 DTSDIR=$SRC/arch/arm/boot/dts/amazon

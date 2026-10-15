@@ -436,13 +436,18 @@ static int al_eth_phy_init(struct al_eth_adapter *adapter)
 	adapter->link_config.active_duplex = DUPLEX_UNKNOWN;
 	adapter->link_config.active_speed = SPEED_UNKNOWN;
 
-	/* Attach the MAC to the PHY. */
+	/*
+	 * Attach the MAC to the PHY. RGMII_ID: mainline at803x applies the
+	 * interface mode to the AR8035 RX/TX clock delays (plain RGMII turns
+	 * them off -> 100% RX CRC errors); the vendor kernel relied on PHY
+	 * strap defaults instead.
+	 */
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 9, 0)
 	phydev = phy_connect(adapter->netdev, phydev_name(phydev),
-			     al_eth_adjust_link, PHY_INTERFACE_MODE_RGMII);
+			     al_eth_adjust_link, PHY_INTERFACE_MODE_RGMII_ID);
 #else
 	phydev = phy_connect(adapter->netdev, dev_name(&phydev->dev),
-			     al_eth_adjust_link, 0, PHY_INTERFACE_MODE_RGMII);
+			     al_eth_adjust_link, 0, PHY_INTERFACE_MODE_RGMII_ID);
 #endif
 	if (IS_ERR(phydev)) {
 		netdev_err(adapter->netdev, "Could not attach to PHY\n");
@@ -4553,6 +4558,10 @@ static const struct net_device_ops al_eth_netdev_ops = {
 	.ndo_select_queue = al_eth_select_queue,
 	.ndo_get_stats64 = al_eth_get_stats64,
 	.ndo_do_ioctl = al_eth_ioctl,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	/* SIOC[GS]MII* only reach the driver via ndo_eth_ioctl since 5.15 */
+	.ndo_eth_ioctl = al_eth_ioctl,
+#endif
 	.ndo_tx_timeout = al_eth_tx_timeout,
 	.ndo_change_mtu = al_eth_change_mtu,
 	.ndo_set_mac_address = al_eth_set_mac_addr,
