@@ -1,0 +1,10 @@
+# The RN212 runs its own kernel (linux-image-*-rn212, local .deb). Debian's
+# kernels can't boot it (no al_eth/Alpine drivers): never install them, not
+# even as a dependency. Our packages have no origin, so they are unaffected.
+Package: linux-image-* linux-headers-*
+Pin: origin deb.debian.org
+Pin-Priority: -1
+
+Package: linux-image-* linux-headers-*
+Pin: origin security.debian.org
+Pin-Priority: -1

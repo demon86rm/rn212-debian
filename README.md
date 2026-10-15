@@ -3,14 +3,16 @@
 Replaces the end-of-life ReadyNAS OS 6 (Debian 8, Linux 4.4) with current
 Debian (trixie, armhf) on Linux 6.6 LTS, updated through `apt`.
 
-**Status: boots Debian from a USB-loaded kernel, network working.** NAND not
-flashed yet.
+**Status: Debian boots standalone from NAND (no USB stick), network and fan
+control working.** DISK1 not mirrored yet.
 
 ### Status (2026-10-15)
 - Debian installed on DISK2 (WD-…055924, `/dev/md9`). DISK1 (WD-…2152822,
-  stock OS) is out of the box, untouched. NAND untouched.
-- Test boot: kernel from the USB stick (Backup button held), root on DISK2.
-  Reaches `rn212 login:` on ttyS0; DHCP, SSH and apt work.
+  stock OS) is out of the box, untouched.
+- Kernel flashed to NAND mtd2 (2026-10-15, via the `linux-image` .deb and its
+  postinst hook); stock mtd2 saved in `/var/backups/rn212-nand/` (md5
+  `bc41c7f5…`). Plain power-on boots Debian to `rn212 login:`; DHCP, SSH and
+  apt work. The USB stick + Backup button stays the recovery path.
 - Serial console works (see [Serial console](#serial-console)).
 - Fixes found with the console:
   - SoC AHCI reports `PORTS_IMPL=0`, so all ports came up DUMMY and `md9` was
@@ -26,7 +28,7 @@ flashed yet.
   four cores loaded. The SoC sensor needed a `thermal-zones` node in the DT.
 
 ### Next steps
-1. Flash the kernel to NAND and boot without the USB stick; mirror DISK1.
+1. Mirror DISK1 into the root RAID (`rn212-mirror-disk`, wipes DISK1).
 
 (`PLAN.md` is the original analysis; this README is current.)
 
@@ -91,11 +93,32 @@ pin marked "P" (top-right):
    initrd factory-installs ReadyNAS OS onto the Debian disk (seen 2026-10-09).
    Never boot stock with the Debian disk inserted.
 4. When Debian works: `rn212-flash-kernel` (backs up mtd2, writes, verifies),
-   remove the stick, reboot.
+   remove the stick, reboot. It flashes `/boot/uImage`, i.e. the kernel the
+   rootfs was built with; if the stick carries a newer kernel, install that
+   kernel's `linux-image-*.deb` with `dpkg -i` instead (its hook rebuilds
+   `/boot/uImage` and flashes it).
 5. Once happy: `rn212-mirror-disk` (wipes disk 1, mirrors root, creates the
    `/srv/data` RAID1).
 
 (`install-from-stock.sh` without `FLASH=0` also writes NAND directly.)
+
+## Kernel updates
+
+`apt upgrade` updates everything except the kernel: ours is a local package
+(`linux-image-*-rn212`) that is not in the Debian archive, and
+`/etc/apt/preferences.d/rn212-no-debian-kernel` keeps Debian's kernels (which
+can't boot this box) from ever being installed. Kernel fixes are manual:
+
+1. Build: bump `KVER` (and/or the package revision) and run
+   `./build.sh kernel && ./build.sh bundle`.
+2. Test first from USB: copy `out/install/usb-boot/*` to the stick, boot
+   with Backup held, check network, disks, `rn212-fan`.
+3. Install: `scp out/kernel-$KVER/linux-image-*.deb` to the NAS and
+   `dpkg -i` it. The `zz-rn212-uimage` hook builds `/boot/uImage` and flashes
+   NAND at once (backup + verify), so only install kernels that passed step 2.
+4. `rn212-flash-kernel` refuses images that don't fit mtd2 (6 MiB; 6.6.158 is
+   5.5 MB). 6.6 is an LTS series: moving to the next LTS means porting the
+   patches and `kernel/files/`, not just bumping `KVER`.
 
 ## Recovery
 
