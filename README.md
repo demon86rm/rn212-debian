@@ -80,6 +80,13 @@ pin marked "P" (top-right):
 ./build.sh bundle    # -> out/install/ (everything the NAS needs)
 ```
 
+**SSH access is key-only.** Put your own SSH public key(s) in
+`rootfs/authorized_keys` before `./build.sh rootfs`; they become root's
+`authorized_keys`. The image disables SSH password logins and locks root's
+password, so without a key there is no way in except the serial console
+(where `passwd` sets a console password). Use `ssh -i <key> root@...` if the
+key isn't one ssh offers by default.
+
 ## Install (on the NAS)
 
 1. Stock OS running, SSH enabled. Copy `out/install/` to the NAS:
@@ -91,7 +98,8 @@ pin marked "P" (top-right):
    `out/install/usb-boot/*` to a FAT32 (MBR) stick in the **front** port, then
    **hold the Backup button, press power, keep Backup held ~15 s**. Only then
    does U-Boot load `uImage-recovery` from the stick. Debian comes up on DHCP,
-   hostname `rn212`: `ssh -i ~/.ssh/readynas_ed25519 root@<ip>`.
+   hostname `rn212`: `ssh root@<ip>` (with the key from
+   `rootfs/authorized_keys`; stock's admin password does not work here).
    **Without the Backup button** U-Boot boots stock from NAND, and the stock
    initrd factory-installs ReadyNAS OS onto the Debian disk (seen 2026-10-09).
    Never boot stock with the Debian disk inserted.
